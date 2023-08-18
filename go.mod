@@ -1,4 +1,4 @@
-module learn-go-server
+module github.com/sadnessOjisan/gochann
 
 go 1.19
 

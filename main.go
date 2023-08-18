@@ -1,11 +1,11 @@
 package main
 
 import (
-	"learn-go-server/router"
 	"log"
 	"net/http"
 
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/sadnessOjisan/gochann/router"
 )
 
 func main() {
