@@ -25,16 +25,20 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 
 	dsn := os.Getenv("dbdsn")
 	db, err := sql.Open("mysql", dsn)
-	defer db.Close()
 	if err != nil {
 		log.Printf("ERROR: db open err: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	defer func() {
+		if err := db.Close(); err != nil {
+			log.Printf("ERROR: db close err: %v", err)
+		}
+	}()
 
 	row := db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
-	var user_id int
-	if err := row.Scan(&user_id); err != nil {
+	var userID int
+	if err := row.Scan(&userID); err != nil {
 		// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
 		cookie := &http.Cookie{
 			Name:    "token",
@@ -47,7 +51,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cookie の情報が session になかった場合
-	if user_id == 0 {
+	if userID == 0 {
 		t := template.Must(template.ParseFiles("./template/home.html"))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := t.Execute(w, nil); err != nil {
