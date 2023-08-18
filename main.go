@@ -3,22 +3,30 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
+
 	"github.com/sadnessOjisan/gochann/router"
 )
 
 func main() {
-	http.HandleFunc("/", router.HomeHandler)
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", router.HomeHandler)
 	// for /users/:id
-	http.HandleFunc("/users", router.UsersHandler)
-	http.HandleFunc("/users/", router.UsersDetailHandler)
+	mux.HandleFunc("/users", router.UsersHandler)
+	mux.HandleFunc("/users/", router.UsersDetailHandler)
 
-	http.HandleFunc("/posts", router.PostsHandler)
-	http.HandleFunc("/posts/", router.PostsDetailHandler)
-	http.HandleFunc("/posts/new", router.PostsNewHandler)
+	mux.HandleFunc("/posts", router.PostsHandler)
+	mux.HandleFunc("/posts/", router.PostsDetailHandler)
+	mux.HandleFunc("/posts/new", router.PostsNewHandler)
 
-	http.HandleFunc("/signout", router.SignoutHandler)
+	mux.HandleFunc("/signout", router.SignoutHandler)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	srv := &http.Server{
+		Addr:              ":8080",
+		Handler:           mux,
+		ReadHeaderTimeout: 30 * time.Second,
+	}
+	log.Fatal(srv.ListenAndServe())
 }

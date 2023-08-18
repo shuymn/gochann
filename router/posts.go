@@ -37,7 +37,7 @@ func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer db.Close()
-	signin_user_query := `
+	const signinUserQuery = `
 		  select
 		    users.id, users.name
 		  from
@@ -49,7 +49,7 @@ func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-	row := db.QueryRow(signin_user_query, token.Value)
+	row := db.QueryRow(signinUserQuery, token.Value)
 	u := &model.User{}
 	if err := row.Scan(&u.ID, &u.Name); err != nil {
 		// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -84,13 +84,17 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 		dsn := os.Getenv("dbdsn")
 		db, err := sql.Open("mysql", dsn)
-		defer db.Close()
 		if err != nil {
 			log.Printf("ERROR: db open err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		signin_user_query := `
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("ERROR: db close err: %v", err)
+			}
+		}()
+		const signinUserQuery = `
 		  select
 		    users.id, users.name
 		  from
@@ -102,7 +106,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := db.QueryRow(signin_user_query, token.Value)
+		row := db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -157,42 +161,41 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		post := &model.Post{}
 		for rows.Next() {
 			fmt.Println("rows scan")
-			post_user := &model.User{}
-			comment_dto := &struct {
+			postUser := &model.User{}
+			commentDTO := &struct {
 				ID        sql.NullInt16
 				Text      sql.NullString
 				CreatedAt sql.NullTime
 				UpdatedAt sql.NullTime
 			}{}
-			user_dto := &struct {
+			userDTO := &struct {
 				ID   sql.NullInt16
 				Name sql.NullString
 			}{}
 			err = rows.Scan(
 				&post.ID, &post.Title, &post.Text, &post.CreatedAt, &post.UpdatedAt,
-				&post_user.ID, &post_user.Name,
-				&comment_dto.ID, &comment_dto.Text, &comment_dto.CreatedAt, &comment_dto.UpdatedAt,
-				&user_dto.ID, &user_dto.Name,
+				&postUser.ID, &postUser.Name,
+				&commentDTO.ID, &commentDTO.Text, &commentDTO.CreatedAt, &commentDTO.UpdatedAt,
+				&userDTO.ID, &userDTO.Name,
 			)
 			if err != nil {
 				log.Printf("ERROR: posts db scan err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			post.User = *post_user
-			if comment_dto.ID.Int16 != 0 {
+			post.User = *postUser
+			if commentDTO.ID.Int16 != 0 {
 				post.Comments = append(post.Comments, model.Comment{
-					ID:        int(comment_dto.ID.Int16),
-					Text:      comment_dto.Text.String,
-					CreatedAt: comment_dto.CreatedAt.Time,
-					UpdatedAt: comment_dto.UpdatedAt.Time,
+					ID:        int(commentDTO.ID.Int16),
+					Text:      commentDTO.Text.String,
+					CreatedAt: commentDTO.CreatedAt.Time,
+					UpdatedAt: commentDTO.UpdatedAt.Time,
 					User: model.User{
-						ID:   int(user_dto.ID.Int16),
-						Name: user_dto.Name.String,
+						ID:   int(userDTO.ID.Int16),
+						Name: userDTO.Name.String,
 					},
 				})
 			}
-
 		}
 
 		funcs := template.FuncMap{
@@ -229,16 +232,20 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			http.NotFound(w, r)
 			return
 		}
-		post_id := segments[2]
+		postID := segments[2]
 
 		dsn := os.Getenv("dbdsn")
 		db, err := sql.Open("mysql", dsn)
-		defer db.Close()
 		if err != nil {
 			log.Printf("ERROR: db open err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("ERROR: db close err: %v", err)
+			}
+		}()
 
 		token, err := r.Cookie("token")
 		if err != nil {
@@ -248,8 +255,8 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		row := db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
-		var user_id int
-		if err := row.Scan(&user_id); err != nil {
+		var userID int
+		if err := row.Scan(&userID); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -261,14 +268,14 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		_, err = ins.Exec(text, post_id, user_id)
+		_, err = ins.Exec(text, postID, userID)
 		if err != nil {
 			log.Printf("ERROR: exec comment insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		http.Redirect(w, r, fmt.Sprintf("/posts/%s", post_id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("/posts/%s", postID), http.StatusSeeOther)
 		return
 	}
 }
@@ -324,13 +331,13 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		post_id, err := res.LastInsertId()
+		postID, err := res.LastInsertId()
 		if err != nil {
 			log.Printf("ERROR: exec get post last id err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		http.Redirect(w, r, fmt.Sprintf("posts/%d", post_id), http.StatusSeeOther)
+		http.Redirect(w, r, fmt.Sprintf("posts/%d", postID), http.StatusSeeOther)
 		return
 	}
 
@@ -345,13 +352,17 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 
 		dsn := os.Getenv("dbdsn")
 		db, err := sql.Open("mysql", dsn)
-		defer db.Close()
 		if err != nil {
 			log.Printf("ERROR: db open err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		signin_user_query := `
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("ERROR: db close err: %v", err)
+			}
+		}()
+		const signinUserQuery = `
 		  select
 		    users.id, users.name
 		  from
@@ -363,7 +374,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := db.QueryRow(signin_user_query, token.Value)
+		row := db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)

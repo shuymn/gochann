@@ -19,16 +19,15 @@ import (
 )
 
 // see: https://stackoverflow.com/questions/15130321/is-there-a-method-to-generate-a-uuid-with-go-language
-func pseudo_uuid() (uuid string) {
+func pseudoUUID() string {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
 		fmt.Println("Error: ", err)
-		return
+		return ""
 	}
 
-	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-	return
+	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
 func UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
@@ -81,18 +80,22 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 
 		dsn := os.Getenv("dbdsn")
 		db, err := sql.Open("mysql", dsn)
-		defer db.Close()
 		if err != nil {
 			log.Printf("ERROR: db open err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("ERROR: db close err: %v", err)
+			}
+		}()
 
-		exsist_user_row := db.QueryRow("select id, password, salt from users where name = ? limit 1", name)
-		var user_id int
-		var current_user_salt string
-		var current_user_hashed_password string
-		if err := exsist_user_row.Scan(&user_id, &current_user_hashed_password, &current_user_salt); err != nil && err != sql.ErrNoRows {
+		exsistUserRow := db.QueryRow("select id, password, salt from users where name = ? limit 1", name)
+		var userID int
+		var currentUserSalt string
+		var currentUserHashedPassword string
+		if err := exsistUserRow.Scan(&userID, &currentUserHashedPassword, &currentUserSalt); err != nil && err != sql.ErrNoRows {
 			log.Printf("ERROR: db scan user err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -105,13 +108,13 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if user_id == 0 {
+		if userID == 0 {
 			// アカウント情報が存在しないなら登録してクッキーを発行する
-			salt := pseudo_uuid()
-			password_added_salt := password + salt
-			password_byte := []byte(password_added_salt)
+			salt := pseudoUUID()
+			passwordAddedSalt := password + salt
+			passwordByte := []byte(passwordAddedSalt)
 			hasher := sha256.New()
-			hasher.Write([]byte(password_byte))
+			hasher.Write(passwordByte)
 			hashedPasswordString := hex.EncodeToString(hasher.Sum(nil))
 
 			ins, err := db.Prepare("insert into users(name, password, salt) value (?, ?, ?)")
@@ -127,22 +130,22 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			added_user_id, err := res.LastInsertId()
+			addedUserID, err := res.LastInsertId()
 			if err != nil {
 				log.Printf("ERROR: get last user id err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			uuid := pseudo_uuid()
+			uuid := pseudoUUID()
 
-			session_insert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
+			sessionInsert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			_, err = session_insert.Exec(added_user_id, uuid)
+			_, err = sessionInsert.Exec(addedUserID, uuid)
 			if err != nil {
 				log.Printf("ERROR: exec session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -162,27 +165,27 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			// アカウント情報が存在するユーザーなら、入力されたパスワードと正しいか確認してから、クッキー発行してログインさせる
-			password_added_salt := password + current_user_salt
-			password_byte := []byte(password_added_salt)
+			passwordAddedSalt := password + currentUserSalt
+			passwordByte := []byte(passwordAddedSalt)
 			hasher := sha256.New()
-			hasher.Write([]byte(password_byte))
+			hasher.Write(passwordByte)
 			hashedPasswordString := hex.EncodeToString(hasher.Sum(nil))
 
-			if current_user_hashed_password != hashedPasswordString {
+			if currentUserHashedPassword != hashedPasswordString {
 				log.Printf("ERROR: user input password mismatch")
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
-			uuid := pseudo_uuid()
-			session_insert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
+			uuid := pseudoUUID()
+			sessionInsert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			_, err = session_insert.Exec(user_id, uuid)
+			_, err = sessionInsert.Exec(userID, uuid)
 			if err != nil {
 				log.Printf("ERROR: exec session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -200,20 +203,22 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/posts", http.StatusSeeOther)
 			return
 		}
-
 	}
 
 	// GET /posts
 	if r.Method == http.MethodGet {
-
 		dsn := os.Getenv("dbdsn")
 		db, err := sql.Open("mysql", dsn)
-		defer db.Close()
 		if err != nil {
 			log.Printf("ERROR: db open err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		defer func() {
+			if err := db.Close(); err != nil {
+				log.Printf("ERROR: db close err: %v", err)
+			}
+		}()
 		rows, err := db.Query("select * from users")
 		if err != nil {
 			log.Printf("ERROR: exec users query err: %v", err)

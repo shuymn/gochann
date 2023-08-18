@@ -1,0 +1,35 @@
+linters-settings:
+  gofmt:
+    rewrite-rules:
+      - pattern: "interface{}"
+        replacement: "any"
+  goimports:
+    local-prefixes: github.com/sadnessOjisan/gochann
+
+linters:
+  disable-all: true
+  enable:
+    - bodyclose
+    - dogsled
+    - errcheck
+    - exportloopref
+    - gochecknoinits
+    - gofmt
+    - goimports
+    - goprintffuncname
+    - gosec
+    - gosimple
+    - govet
+    - ineffassign
+    - nakedret
+    - noctx
+    - staticcheck
+    - stylecheck
+    - typecheck
+    - unconvert
+    - unparam
+    - unused
+    - whitespace
+
+run:
+  timeout: 5m
