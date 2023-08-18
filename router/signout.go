@@ -1,28 +1,19 @@
 package router
 
 import (
-	"database/sql"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
 
 // どんな結果だろうと必ずクッキーを消すようにする。early return しない。
-func SignoutHandler(w http.ResponseWriter, r *http.Request) {
-	dsn := os.Getenv("dbdsn")
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		log.Printf("ERROR: db open err: %v", err)
-	}
-	defer db.Close()
-
+func (h *Handler) SignoutHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := r.Cookie("token")
 	if err != nil {
 		log.Printf("ERROR: %v", err)
 	}
 
-	ins, err := db.Prepare("delete from session where token =?")
+	ins, err := h.db.Prepare("delete from session where token =?")
 	if err != nil {
 		log.Printf("ERROR: prepare token delete err: %v", err)
 	}

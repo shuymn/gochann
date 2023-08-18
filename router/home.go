@@ -1,15 +1,13 @@
 package router
 
 import (
-	"database/sql"
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"time"
 )
 
-func HomeHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 	token, err := r.Cookie("token")
 	// cookie に token がないなら home ページを表示
 	if err != nil {
@@ -23,20 +21,7 @@ func HomeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsn := os.Getenv("dbdsn")
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		log.Printf("ERROR: db open err: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer func() {
-		if err := db.Close(); err != nil {
-			log.Printf("ERROR: db close err: %v", err)
-		}
-	}()
-
-	row := db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
+	row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 	var userID int
 	if err := row.Scan(&userID); err != nil {
 		// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
