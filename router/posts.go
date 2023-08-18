@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"html/template"
-	"learn-go-server/model"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/sadnessOjisan/gochann/model"
 )
 
 func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
