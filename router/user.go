@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -30,7 +29,7 @@ func pseudoUUID() string {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 }
 
-func UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		fmt.Printf("method not allowed")
@@ -44,15 +43,7 @@ func UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsn := os.Getenv("dbdsn")
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		log.Printf("ERROR: db open err: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	row := db.QueryRow("select * from users where id = ? limit 1", id)
-	defer db.Close()
+	row := h.db.QueryRow("select * from users where id = ? limit 1", id)
 
 	u := &model.User{}
 	if err := row.Scan(&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt); err != nil {
@@ -68,7 +59,7 @@ func UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func UsersHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 	// POST users
 	if r.Method == http.MethodPost {
 		name := r.FormValue("name")
@@ -78,20 +69,7 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("ERROR: db close err: %v", err)
-			}
-		}()
-
-		exsistUserRow := db.QueryRow("select id, password, salt from users where name = ? limit 1", name)
+		exsistUserRow := h.db.QueryRow("select id, password, salt from users where name = ? limit 1", name)
 		var userID int
 		var currentUserSalt string
 		var currentUserHashedPassword string
@@ -117,7 +95,7 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			hasher.Write(passwordByte)
 			hashedPasswordString := hex.EncodeToString(hasher.Sum(nil))
 
-			ins, err := db.Prepare("insert into users(name, password, salt) value (?, ?, ?)")
+			ins, err := h.db.Prepare("insert into users(name, password, salt) value (?, ?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare users insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -138,7 +116,7 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			uuid := pseudoUUID()
 
-			sessionInsert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
+			sessionInsert, err := h.db.Prepare("insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -178,7 +156,7 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			uuid := pseudoUUID()
-			sessionInsert, err := db.Prepare("insert into session(user_id, token) value (?, ?)")
+			sessionInsert, err := h.db.Prepare("insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -207,19 +185,7 @@ func UsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// GET /posts
 	if r.Method == http.MethodGet {
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("ERROR: db close err: %v", err)
-			}
-		}()
-		rows, err := db.Query("select * from users")
+		rows, err := h.db.Query("select * from users")
 		if err != nil {
 			log.Printf("ERROR: exec users query err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)

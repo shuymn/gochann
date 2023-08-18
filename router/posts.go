@@ -6,7 +6,6 @@ import (
 	"html/template"
 	"log"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -15,7 +14,7 @@ import (
 	"github.com/sadnessOjisan/gochann/model"
 )
 
-func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		log.Printf("ERROR: invalid method")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -29,14 +28,6 @@ func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dsn := os.Getenv("dbdsn")
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		log.Printf("ERROR: db open err: %v", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-	defer db.Close()
 	const signinUserQuery = `
 		  select
 		    users.id, users.name
@@ -49,7 +40,7 @@ func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-	row := db.QueryRow(signinUserQuery, token.Value)
+	row := h.db.QueryRow(signinUserQuery, token.Value)
 	u := &model.User{}
 	if err := row.Scan(&u.ID, &u.Name); err != nil {
 		// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -72,7 +63,7 @@ func PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 	// GET /posts/:id
 	if r.Method == http.MethodGet {
 		token, err := r.Cookie("token")
@@ -82,18 +73,6 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("ERROR: db close err: %v", err)
-			}
-		}()
 		const signinUserQuery = `
 		  select
 		    users.id, users.name
@@ -106,7 +85,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := db.QueryRow(signinUserQuery, token.Value)
+		row := h.db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -151,7 +130,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    p.id = ?		  
 		`
-		rows, err := db.Query(query, id)
+		rows, err := h.db.Query(query, id)
 		if err != nil {
 			log.Printf("ERROR: exec posts query err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -234,19 +213,6 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		postID := segments[2]
 
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("ERROR: db close err: %v", err)
-			}
-		}()
-
 		token, err := r.Cookie("token")
 		if err != nil {
 			log.Println(err)
@@ -254,7 +220,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		row := db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
+		row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 		var userID int
 		if err := row.Scan(&userID); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
@@ -262,7 +228,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		ins, err := db.Prepare("insert into comments(text, post_id, user_id) value (?, ?, ?)")
+		ins, err := h.db.Prepare("insert into comments(text, post_id, user_id) value (?, ?, ?)")
 		if err != nil {
 			log.Printf("ERROR: prepare comment insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -280,7 +246,7 @@ func PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func PostsHandler(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 	// POST /posts
 	if r.Method == http.MethodPost {
 		token, err := r.Cookie("token")
@@ -302,16 +268,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer db.Close()
-
-		row := db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
+		row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 		var userID int
 		if err := row.Scan(&userID); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
@@ -319,7 +276,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		ins, err := db.Prepare("insert into posts(title, text, user_id) value (?, ?, ?)")
+		ins, err := h.db.Prepare("insert into posts(title, text, user_id) value (?, ?, ?)")
 		if err != nil {
 			log.Printf("ERROR: prepare posts insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -350,18 +307,6 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		dsn := os.Getenv("dbdsn")
-		db, err := sql.Open("mysql", dsn)
-		if err != nil {
-			log.Printf("ERROR: db open err: %v", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-		defer func() {
-			if err := db.Close(); err != nil {
-				log.Printf("ERROR: db close err: %v", err)
-			}
-		}()
 		const signinUserQuery = `
 		  select
 		    users.id, users.name
@@ -374,7 +319,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := db.QueryRow(signinUserQuery, token.Value)
+		row := h.db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
@@ -382,7 +327,7 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rows, err := db.Query(`
+		rows, err := h.db.Query(`
 		  select
 		    p.id, p.title, p.text, p.created_at, p.updated_at,
 			u.id as user_id, u.name as user_name
@@ -400,7 +345,6 @@ func PostsHandler(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		defer db.Close()
 
 		var posts []model.Post
 		for rows.Next() {
