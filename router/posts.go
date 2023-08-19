@@ -14,6 +14,20 @@ import (
 	"github.com/sadnessOjisan/gochann/model"
 )
 
+var postDetailFuncs = template.FuncMap{
+	"add": func(a, b int) int {
+		return a + b
+	},
+}
+
+var (
+	postsHTML    = template.Must(template.ParseFS(templates, "template/posts.html", "template/_header.html"))
+	postsNewHTML = template.Must(template.ParseFS(templates, "template/posts-new.html", "template/_header.html"))
+
+	// NOTE: .Func を呼ぶ位置に注意
+	postDetailHTML = template.Must(template.New("post-detail.html").Funcs(postDetailFuncs).ParseFS(templates, "template/post-detail.html", "template/_header.html"))
+)
+
 func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		log.Printf("ERROR: invalid method")
@@ -54,9 +68,8 @@ func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	t := template.Must(template.ParseFiles("./template/posts-new.html", "./template/_header.html"))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := t.Execute(w, u); err != nil {
+	if err := postsNewHTML.Execute(w, u); err != nil {
 		log.Printf("ERROR: exec templating err: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -177,16 +190,8 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		funcs := template.FuncMap{
-			"add": func(a, b int) int {
-				return a + b
-			},
-		}
-		// NOTE: .Func を呼ぶ位置に注意
-		t := template.Must(template.New("post-detail.html").Funcs(funcs).ParseFiles("./template/post-detail.html", "./template/_header.html"))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-		if err := t.Execute(w, struct {
+		if err := postDetailHTML.Execute(w, struct {
 			model.Post
 			model.User
 		}{Post: *post, User: *u}); err != nil {
@@ -359,9 +364,8 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 			posts = append(posts, *p)
 		}
 
-		t := template.Must(template.ParseFiles("./template/posts.html", "./template/_header.html"))
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		if err := t.Execute(w, struct {
+		if err := postsHTML.Execute(w, struct {
 			Posts []model.Post
 			model.User
 		}{Posts: posts, User: *u}); err != nil {

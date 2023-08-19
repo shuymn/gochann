@@ -24,7 +24,6 @@ ENV TZ=Asia/Tokyo
 WORKDIR /
 
 COPY --from=builder /build/main /main
-COPY --from=builder /build/template /template
 
 USER nonroot
 
