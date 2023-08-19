@@ -192,7 +192,7 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var users []model.User
+		var users []*model.User
 		for rows.Next() {
 			u := &model.User{}
 			if err := rows.Scan(&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt); err != nil {
@@ -200,7 +200,7 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			users = append(users, *u)
+			users = append(users, u)
 		}
 
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")

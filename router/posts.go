@@ -192,9 +192,9 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := postDetailHTML.Execute(w, struct {
-			model.Post
-			model.User
-		}{Post: *post, User: *u}); err != nil {
+			*model.Post
+			*model.User
+		}{Post: post, User: u}); err != nil {
 			log.Printf("ERROR: exec templating err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -351,7 +351,7 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var posts []model.Post
+		var posts []*model.Post
 		for rows.Next() {
 			p := &model.Post{}
 			u := &model.User{}
@@ -360,15 +360,15 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			p.User = *u
-			posts = append(posts, *p)
+			p.User = u
+			posts = append(posts, p)
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		if err := postsHTML.Execute(w, struct {
-			Posts []model.Post
-			model.User
-		}{Posts: posts, User: *u}); err != nil {
+			Posts []*model.Post
+			*model.User
+		}{Posts: posts, User: u}); err != nil {
 			log.Printf("ERROR: exec templating err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
