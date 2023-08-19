@@ -186,14 +186,14 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
-			post.User = *postUser
-			if commentDTO.ID.Int16 != 0 {
-				post.Comments = append(post.Comments, model.Comment{
+			post.User = postUser
+			if commentDTO.ID.Valid && userDTO.ID.Valid {
+				post.Comments = append(post.Comments, &model.Comment{
 					ID:        int(commentDTO.ID.Int16),
 					Text:      commentDTO.Text.String,
 					CreatedAt: commentDTO.CreatedAt.Time,
 					UpdatedAt: commentDTO.UpdatedAt.Time,
-					User: model.User{
+					User: &model.User{
 						ID:   int(userDTO.ID.Int16),
 						Name: userDTO.Name.String,
 					},
