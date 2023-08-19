@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -47,6 +48,10 @@ func (h *Handler) UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 
 	u := &model.User{}
 	if err := row.Scan(&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
 		log.Printf("ERROR: db scan user err: %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return

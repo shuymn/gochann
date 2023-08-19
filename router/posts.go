@@ -2,6 +2,7 @@ package router
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -57,14 +58,19 @@ func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 	row := h.db.QueryRow(signinUserQuery, token.Value)
 	u := &model.User{}
 	if err := row.Scan(&u.ID, &u.Name); err != nil {
-		// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
-		cookie := &http.Cookie{
-			Name:    "token",
-			Expires: time.Now(),
-		}
+		if errors.Is(err, sql.ErrNoRows) {
+			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
+			cookie := &http.Cookie{
+				Name:    "token",
+				Expires: time.Now(),
+			}
 
-		http.SetCookie(w, cookie)
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.SetCookie(w, cookie)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+			return
+		}
+		log.Printf("ERROR: db scan user err: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
@@ -101,14 +107,19 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		row := h.db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
-			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
-			cookie := &http.Cookie{
-				Name:    "token",
-				Expires: time.Now(),
-			}
+			if errors.Is(err, sql.ErrNoRows) {
+				// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
+				cookie := &http.Cookie{
+					Name:    "token",
+					Expires: time.Now(),
+				}
 
-			http.SetCookie(w, cookie)
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+				http.SetCookie(w, cookie)
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+			log.Printf("ERROR: db scan user err: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
