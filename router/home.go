@@ -12,6 +12,8 @@ import (
 var homeHTML = template.Must(template.ParseFS(templates, "template/home.html"))
 
 func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	token, err := r.Cookie("token")
 	// cookie に token がないなら home ページを表示
 	if err != nil {
@@ -24,8 +26,8 @@ func (h *Handler) HomeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 	var userID int
+	row := h.db.QueryRowContext(ctx, "select user_id from session where token = ? limit 1", token.Value)
 	if err := row.Scan(&userID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。

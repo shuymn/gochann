@@ -30,6 +30,8 @@ var (
 )
 
 func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	if r.Method != http.MethodGet {
 		log.Printf("ERROR: invalid method")
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -55,8 +57,8 @@ func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-	row := h.db.QueryRow(signinUserQuery, token.Value)
 	u := &model.User{}
+	row := h.db.QueryRowContext(ctx, signinUserQuery, token.Value)
 	if err := row.Scan(&u.ID, &u.Name); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -83,6 +85,8 @@ func (h *Handler) PostsNewHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// GET /posts/:id
 	if r.Method == http.MethodGet {
 		token, err := r.Cookie("token")
@@ -104,8 +108,8 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := h.db.QueryRow(signinUserQuery, token.Value)
 		u := &model.User{}
+		row := h.db.QueryRowContext(ctx, signinUserQuery, token.Value)
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				// token に紐づくユーザーがないので認証エラー。token リセットしてホームに戻す。
@@ -131,7 +135,7 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		query := `
+		const query = `
 		  select
 		    p.id, p.title, p.text, p.created_at, p.updated_at,
 			post_user.id, post_user.name,
@@ -154,7 +158,7 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    p.id = ?		  
 		`
-		rows, err := h.db.Query(query, id)
+		rows, err := h.db.QueryContext(ctx, query, id)
 		if err != nil {
 			log.Printf("ERROR: exec posts query err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -236,21 +240,21 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 		var userID int
+		row := h.db.QueryRowContext(ctx, "select user_id from session where token = ? limit 1", token.Value)
 		if err := row.Scan(&userID); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		ins, err := h.db.Prepare("insert into comments(text, post_id, user_id) value (?, ?, ?)")
+		ins, err := h.db.PrepareContext(ctx, "insert into comments(text, post_id, user_id) value (?, ?, ?)")
 		if err != nil {
 			log.Printf("ERROR: prepare comment insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		_, err = ins.Exec(text, postID, userID)
+		_, err = ins.ExecContext(ctx, text, postID, userID)
 		if err != nil {
 			log.Printf("ERROR: exec comment insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -263,6 +267,8 @@ func (h *Handler) PostsDetailHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// POST /posts
 	if r.Method == http.MethodPost {
 		token, err := r.Cookie("token")
@@ -284,21 +290,21 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		row := h.db.QueryRow("select user_id from session where token = ? limit 1", token.Value)
 		var userID int
+		row := h.db.QueryRowContext(ctx, "select user_id from session where token = ? limit 1", token.Value)
 		if err := row.Scan(&userID); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		ins, err := h.db.Prepare("insert into posts(title, text, user_id) value (?, ?, ?)")
+		ins, err := h.db.PrepareContext(ctx, "insert into posts(title, text, user_id) value (?, ?, ?)")
 		if err != nil {
 			log.Printf("ERROR: prepare posts insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		res, err := ins.Exec(title, text, userID)
+		res, err := ins.ExecContext(ctx, title, text, userID)
 		if err != nil {
 			log.Printf("ERROR: exec post insert err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -335,7 +341,7 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 		  where
 		    token = ?
 		`
-		row := h.db.QueryRow(signinUserQuery, token.Value)
+		row := h.db.QueryRowContext(ctx, signinUserQuery, token.Value)
 		u := &model.User{}
 		if err := row.Scan(&u.ID, &u.Name); err != nil {
 			log.Printf("ERROR: db scan user err: %v", err)
@@ -343,7 +349,7 @@ func (h *Handler) PostsHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		rows, err := h.db.Query(`
+		rows, err := h.db.QueryContext(ctx, `
 		  select
 		    p.id, p.title, p.text, p.created_at, p.updated_at,
 			u.id as user_id, u.name as user_name

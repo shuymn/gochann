@@ -31,6 +31,8 @@ func pseudoUUID() string {
 }
 
 func (h *Handler) UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		fmt.Printf("method not allowed")
@@ -44,9 +46,8 @@ func (h *Handler) UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := h.db.QueryRow("select * from users where id = ? limit 1", id)
-
 	u := &model.User{}
+	row := h.db.QueryRowContext(ctx, "select * from users where id = ? limit 1", id)
 	if err := row.Scan(&u.ID, &u.Name, &u.Email, &u.CreatedAt, &u.UpdatedAt); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			w.WriteHeader(http.StatusNotFound)
@@ -65,6 +66,8 @@ func (h *Handler) UsersDetailHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
 	// POST users
 	if r.Method == http.MethodPost {
 		name := r.FormValue("name")
@@ -74,10 +77,11 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		exsistUserRow := h.db.QueryRow("select id, password, salt from users where name = ? limit 1", name)
-		var userID int
-		var currentUserSalt string
-		var currentUserHashedPassword string
+		exsistUserRow := h.db.QueryRowContext(ctx, "select id, password, salt from users where name = ? limit 1", name)
+		var (
+			userID                                     int
+			currentUserSalt, currentUserHashedPassword string
+		)
 		if err := exsistUserRow.Scan(&userID, &currentUserHashedPassword, &currentUserSalt); err != nil && err != sql.ErrNoRows {
 			log.Printf("ERROR: db scan user err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -100,14 +104,14 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 			hasher.Write(passwordByte)
 			hashedPasswordString := hex.EncodeToString(hasher.Sum(nil))
 
-			ins, err := h.db.Prepare("insert into users(name, password, salt) value (?, ?, ?)")
+			ins, err := h.db.PrepareContext(ctx, "insert into users(name, password, salt) value (?, ?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare users insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			res, err := ins.Exec(name, hashedPasswordString, salt)
+			res, err := ins.ExecContext(ctx, name, hashedPasswordString, salt)
 			if err != nil {
 				log.Printf("ERROR: exec user insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -121,14 +125,14 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			uuid := pseudoUUID()
 
-			sessionInsert, err := h.db.Prepare("insert into session(user_id, token) value (?, ?)")
+			sessionInsert, err := h.db.PrepareContext(ctx, "insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
-			_, err = sessionInsert.Exec(addedUserID, uuid)
+			_, err = sessionInsert.ExecContext(ctx, addedUserID, uuid)
 			if err != nil {
 				log.Printf("ERROR: exec session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -161,7 +165,7 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 			uuid := pseudoUUID()
-			sessionInsert, err := h.db.Prepare("insert into session(user_id, token) value (?, ?)")
+			sessionInsert, err := h.db.PrepareContext(ctx, "insert into session(user_id, token) value (?, ?)")
 			if err != nil {
 				log.Printf("ERROR: prepare session insert err: %v", err)
 				w.WriteHeader(http.StatusInternalServerError)
@@ -190,7 +194,7 @@ func (h *Handler) UsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	// GET /posts
 	if r.Method == http.MethodGet {
-		rows, err := h.db.Query("select * from users")
+		rows, err := h.db.QueryContext(ctx, "select * from users")
 		if err != nil {
 			log.Printf("ERROR: exec users query err: %v", err)
 			w.WriteHeader(http.StatusInternalServerError)
